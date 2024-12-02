@@ -1,6 +1,6 @@
 export enum ApiRoute {
-  List = '/list',
-  Filters = '/filters',
-  Details = '/details',
-  Models = './models',
+    List = '/aggregator/cars',
+    Filters = '/filters',
+    Details = '/details',
+    Models = '/models',
 }

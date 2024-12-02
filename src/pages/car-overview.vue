@@ -1,35 +1,28 @@
 <script setup lang="ts">
 import CategoryFilter from 'components/category-filter.vue';
-import SortBar from 'src/components/sort-bar.vue';
 import VehicleList from 'components/vehicle-list.vue';
 import { DEFAULT_PAGE, InitialFIlters } from 'src/constants/filters';
 import { Filters } from 'src/types/filters';
-import { reactive, ref, watch } from 'vue';
+import { reactive, ref, watch, computed } from 'vue';
 import { useVehiclesList } from 'src/resources/list';
-import { DefaultListParams } from 'src/constants/list-params';
-import { computed } from 'vue';
 import { VechiclesListParams } from 'src/resources/list/types';
-import { uid } from 'quasar';
+import { useQuasar } from 'quasar';
 
-const filters = reactive<Filters>(InitialFIlters);
-const maxPages = ref(1);
+const filters = reactive<Filters>(InitialFIlters());
+const maxPages = ref(20);
 const resultsCount = ref(0);
 const isSkeletonData = ref(true);
 const isResultsStable = ref(false);
 
+const $q = useQuasar();
+
 const listParams = computed<VechiclesListParams>(() => {
-    const { page, desc, sort } = filters;
-    const mmmv = filters.brand
-        ? [filters.brand ?? '', filters.model ?? '', '', ''].join('|')
-        : undefined;
+    const { carBrand, carModel, ...restFilter } = filters;
 
     return {
-        ...DefaultListParams,
-        search_id: uid().slice(-11),
-        mmmv,
-        page,
-        desc,
-        sort,
+        carBrand: carBrand ?? {},
+        carModel: carModel ?? {},
+        ...restFilter,
     };
 });
 
@@ -40,45 +33,44 @@ const {
     isFetchedAfterMount,
 } = useVehiclesList(listParams);
 
-const listEmpty = computed(
-    () => !vehiclesListData.value?.pageProps.listings.length
-);
+const listEmpty = computed(() => !vehiclesListData.value?.length);
 
 watch(
-    [() => filters.sort, () => filters.desc, () => filters.page],
-    () => {
-        isResultsStable.value = true;
-    },
-    {
-        deep: true,
-    }
-);
-
-watch(
-    [() => filters.sort, () => filters.desc],
-    () => {
-        filters.page = DEFAULT_PAGE;
+    () => ({ ...filters }),
+    (newFilters, oldFilters) => {
+        if (newFilters.page === oldFilters.page) {
+            filters.page = DEFAULT_PAGE;
+        }
     },
     { deep: true }
 );
 
-watch(isPlaceholderData, (newIsPlaceholderData) => {
-    if (!newIsPlaceholderData) {
-        isResultsStable.value = false;
-    }
-
-    if (!newIsPlaceholderData && vehiclesListData.value) {
-        const { numberOfPages, numberOfResults } =
-            vehiclesListData.value.pageProps;
-
-        maxPages.value = numberOfPages;
-        resultsCount.value = numberOfResults;
-
+watch(
+    () => filters.page,
+    () => {
         window.scrollTo({
             top: 0,
         });
+
+        isResultsStable.value = true;
     }
-});
+);
+
+watch(
+    isPlaceholderData,
+    (newIsPlaceholderData) => {
+        if (!newIsPlaceholderData) {
+            isResultsStable.value = false;
+
+            $q.loading.hide();
+        } else {
+            $q.loading.show();
+        }
+    },
+    {
+        immediate: true,
+    }
+);
 
 watch(isFetchedAfterMount, () => (isSkeletonData.value = false), {
     once: true,
@@ -95,11 +87,10 @@ watch(isFetchedAfterMount, () => (isSkeletonData.value = false), {
                 :results-loading="!isResultsStable && isFetching"
             />
             <div class="column fit">
-                <SortBar
-                    v-model:filters="filters"
-                    :loading="isPlaceholderData"
+                <VehicleList
+                    :params="listParams"
+                    :skeleton="isPlaceholderData"
                 />
-                <VehicleList :params="listParams" :skeleton="isSkeletonData" />
 
                 <div
                     v-if="!isSkeletonData && !listEmpty"

@@ -1,12 +1,9 @@
 <script setup lang="ts">
-import {
-    DefaultBrands,
-    DefaultModels,
-} from 'src/constants/select-default-options';
+import { InitialFIlters } from 'src/constants/filters';
 import { useFilters } from 'src/resources/filters';
 import { useModels } from 'src/resources/models';
 import { Filters } from 'src/types/filters';
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 defineProps<{
     resultsCount?: number;
@@ -16,102 +13,288 @@ defineProps<{
 
 const filters = defineModel<Filters>('filters', { required: true });
 
-const { data: filtersData, isSuccess: isBrandSuccess } = useFilters();
+const transmission = ref<string[]>([]);
+const fuel = ref<string[]>([]);
+const carBody = ref<string[]>([]);
 
-const brandFilters = computed(() =>
-    isBrandSuccess && filtersData.value?.brand.length
-        ? [DefaultBrands, ...filtersData.value.brand]
-        : [DefaultBrands]
+const { data: filtersData, isSuccess: isFiltersSuccess } = useFilters();
+
+const modelsEnabled = computed(
+    () => isFiltersSuccess && !!filters.value.carBrand
 );
-
-const modelsEnabled = computed(() => isBrandSuccess && !!filters.value.brand);
 
 const paramsBrand = computed(() => ({
-    modelId: filters.value.brand ?? 0,
+    modelId: filters.value.carBrand?.brandId ?? 0,
 }));
 
-const { data: modelsData, isSuccess: isModelsSuccess } = useModels(
-    paramsBrand,
-    modelsEnabled
-);
+const { data: modelsData } = useModels(paramsBrand, modelsEnabled);
 
-const modelFilters = computed(() =>
-    isModelsSuccess && modelsData.value?.models.length
-        ? [DefaultModels, ...modelsData.value.models]
-        : [DefaultModels]
-);
+const yearToOptions = computed(() => {
+    if (!filtersData.value?.fr) {
+        return [];
+    }
 
-watch(
-    () => filters.value.brand,
-    () => (filters.value.model = null)
-);
+    return filtersData.value?.fr.filter((year) => {
+        const filterFrom = filters.value.firstRegistration.yearFrom;
+
+        if (filterFrom) {
+            return year >= filterFrom;
+        }
+
+        return true;
+    });
+});
+
+const priceToOptions = computed(() => {
+    if (!filtersData.value?.p) {
+        return [];
+    }
+
+    return filtersData.value?.p.filter((price) => {
+        const priceFrom = filters.value.price.priceFrom;
+
+        if (priceFrom) {
+            return price >= priceFrom;
+        }
+
+        return true;
+    });
+});
+
+const milageToOptions = computed(() => {
+    if (!filtersData.value?.lsml) {
+        return [];
+    }
+
+    return filtersData.value?.lsml.filter((milage) => {
+        const milageFrom = filters.value.mileage.mileageFrom;
+
+        if (milageFrom) {
+            return milage >= milageFrom;
+        }
+
+        return true;
+    });
+});
+
+const applyTransmissionFilter = () =>
+    (filters.value.transmissionType = transmission.value);
+
+const applyFuelFilter = () => (filters.value.fuelType = fuel.value);
+
+const applyCarBodyFilter = () => (filters.value.bodyType = carBody.value);
 
 const resetBrand = () => {
-    filters.value.brand = null;
-    filters.value.model = null;
+    filters.value.carBrand = null;
+    filters.value.carModel = null;
 };
 
 const resetModel = () => {
-    filters.value.model = null;
+    filters.value.carModel = null;
 };
+
+const resetFilters = () => {
+    Object.assign(filters.value, InitialFIlters());
+    transmission.value = [];
+    fuel.value = [];
+    carBody.value = [];
+};
+
+watch(
+    () => filters.value.carBrand,
+    () => (filters.value.carModel = null)
+);
+
+watch(
+    () => filters.value.firstRegistration.yearFrom,
+    (newYearFrom) => {
+        const yearTo = filters.value.firstRegistration.yearTo;
+
+        if (newYearFrom && yearTo && newYearFrom > yearTo) {
+            filters.value.firstRegistration.yearTo = newYearFrom;
+        }
+    }
+);
+
+watch(
+    () => filters.value.price.priceFrom,
+    (newPriceFrom) => {
+        const priceTo = filters.value.price.priceTo;
+
+        if (newPriceFrom && priceTo && newPriceFrom > priceTo) {
+            filters.value.price.priceTo = newPriceFrom;
+        }
+    }
+);
+
+watch(
+    () => filters.value.mileage.mileageFrom,
+    (newMilageFrom) => {
+        const milageTo = filters.value.mileage.mileageTo;
+
+        if (newMilageFrom && milageTo && newMilageFrom > milageTo) {
+            filters.value.mileage.mileageTo = newMilageFrom;
+        }
+    }
+);
 </script>
 
 <template>
     <q-card class="filter-card fit q-pa-md app-shadow">
-        <h2 class="q-mt-none q-mb-lg text-h6 text-dark">Filters</h2>
+        <div class="q-mb-lg row no-wrap justify-between items-center">
+            <h2 class="no-margin text-h6 text-dark">Filters</h2>
+            <q-btn label="reset" size="md" flat @click="resetFilters" />
+        </div>
 
         <q-form class="q-gutter-y-md">
             <q-select
                 label="Brand"
-                :clearable="!!filters.brand"
+                :clearable="!!filters.carBrand"
                 :disable="loading"
                 outlined
-                emit-value
-                map-options
-                v-model="filters.brand"
-                :options="brandFilters"
+                option-value="brandId"
+                option-label="brandName"
+                v-model="filters.carBrand"
+                :options="filtersData?.carBrand ?? []"
                 @clear="resetBrand"
             />
             <q-select
                 label="Model"
                 outlined
-                :clearable="!!filters.model"
-                v-model="filters.model"
+                :clearable="!!filters.carModel"
+                v-model="filters.carModel"
                 :disable="!modelsEnabled || loading"
-                emit-value
-                map-options
-                :options="modelFilters"
-                option-value="id"
-                option-label="name"
+                :options="modelsData ?? []"
+                option-value="modelId"
+                option-label="modelName"
                 @clear="resetModel"
             />
-        </q-form>
 
-        <div class="q-mt-md flex flex-center">
-            <q-chip
-                class="q-py-sm text-body1 fit"
-                color="primary"
-                text-color="white"
-                style="height: auto"
-            >
-                <div v-if="resultsLoading" class="text-center fit">
-                    <q-spinner class="q-ml-xs" size="sm" />
-                </div>
+            <div class="q-mt-md">
+                <span class="text-dark text-body1 text-weight-medium"
+                    >First registration date, year</span
+                >
 
-                <div class="row fit items-center justify-center" v-else>
-                    <q-icon
-                        class="q-mr-xs"
-                        name="mdi-magnify"
-                        size="19px"
-                        style="margin-bottom: 2px"
+                <div class="q-mt-sm row no-wrap">
+                    <q-select
+                        class="full-width"
+                        label="From"
+                        outlined
+                        :clearable="!!filters.firstRegistration.yearFrom"
+                        v-model="filters.firstRegistration.yearFrom"
+                        :disable="loading"
+                        :options="filtersData?.fr ?? []"
                     />
-                    <span class="text-center">
-                        {{ resultsCount?.toLocaleString('en-US') }}
-                        results founded
-                    </span>
+
+                    <q-select
+                        class="full-width q-gutter-x-md"
+                        label="To"
+                        outlined
+                        :clearable="!!filters.firstRegistration.yearTo"
+                        v-model="filters.firstRegistration.yearTo"
+                        :disable="loading"
+                        :options="yearToOptions"
+                    />
                 </div>
-            </q-chip>
-        </div>
+            </div>
+
+            <div class="q-mt-md">
+                <span class="text-dark text-body1 text-weight-medium"
+                    >Price, €</span
+                >
+
+                <div class="q-mt-sm row no-wrap">
+                    <q-select
+                        class="full-width"
+                        label="From, €"
+                        outlined
+                        :clearable="!!filters.price.priceFrom"
+                        v-model="filters.price.priceFrom"
+                        :disable="loading"
+                        :options="filtersData?.p ?? []"
+                    />
+
+                    <q-select
+                        class="full-width q-gutter-x-md"
+                        label="To, €"
+                        outlined
+                        :clearable="!!filters.price.priceTo"
+                        v-model="filters.price.priceTo"
+                        :disable="loading"
+                        :options="priceToOptions"
+                    />
+                </div>
+            </div>
+
+            <div class="q-mt-md">
+                <span class="text-dark text-body1 text-weight-medium"
+                    >Mileage, km</span
+                >
+
+                <div class="q-mt-sm row no-wrap">
+                    <q-select
+                        class="full-width"
+                        label="From, km"
+                        outlined
+                        :clearable="!!filters.mileage.mileageFrom"
+                        v-model="filters.mileage.mileageFrom"
+                        :disable="loading"
+                        :options="filtersData?.lsml ?? []"
+                    />
+
+                    <q-select
+                        class="full-width q-gutter-x-md"
+                        label="To, km"
+                        outlined
+                        :clearable="!!filters.mileage.mileageTo"
+                        v-model="filters.mileage.mileageTo"
+                        :disable="loading"
+                        :options="milageToOptions"
+                    />
+                </div>
+            </div>
+
+            <q-select
+                multiple
+                label="Transmission"
+                outlined
+                emit-value
+                map-options
+                v-model="transmission"
+                :disable="loading"
+                option-value="i"
+                option-label="n"
+                @popup-hide="applyTransmissionFilter"
+                :options="filtersData?.tr ?? []"
+                popup-content-class="text-grey-6"
+            />
+
+            <q-select
+                multiple
+                label="Fuel"
+                outlined
+                emit-value
+                map-options
+                v-model="fuel"
+                :disable="loading"
+                option-value="i"
+                option-label="n"
+                @popup-hide="applyFuelFilter"
+                :options="filtersData?.ft ?? []"
+                popup-content-class="text-grey-5"
+            />
+
+            <q-select
+                multiple
+                label="Body type"
+                outlined
+                v-model="carBody"
+                :disable="loading"
+                @popup-hide="applyCarBodyFilter"
+                :options="filtersData?.bodyType ?? []"
+                popup-content-class="text-grey-5"
+            />
+        </q-form>
     </q-card>
 </template>
 
