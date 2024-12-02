@@ -1,33 +1,14 @@
 export type ModelsParams = {
-  modelId: number;
+    modelId: number;
 };
 
 type Model = {
-  id: number;
-  name: string;
-  makeId: number;
+    label: string;
+    value: string;
 };
-
-type ModelGroup = Model & { vehicleTypeId: string };
 
 export type ModelsResponse = {
-  data: {
-    taxonomy: {
-      filters: {
-        model: {
-          values: Model[];
-        };
-        modelGroup: {
-          values: ModelGroup[];
-        };
-        modelLine: {
-          values: ModelGroup[];
-        };
-      };
-    };
-  };
+    data: (Model | { optgroupLabel: string; items: Model[] })[];
 };
 
-export type ModelsTransformed = {
-  models: Model[];
-};
+export type ModelsSelect = { modelId: string; modelName: string }[];

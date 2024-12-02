@@ -1,4 +1,3 @@
-export const DefaultBrands = { label: 'All brands', value: null };
 export const DefaultModels = { name: 'All models', id: null };
 
 export const SortOptions = [
